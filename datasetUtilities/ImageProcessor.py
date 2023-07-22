@@ -101,9 +101,10 @@ class ImageProcessor():
         params, r_sq = model.fit()
         dark_params, bright_params = params
         thresh = -4 * dark_params[1]
+        block_size = int(4 * (self.r_atom // 2) + 5)
         for img in frac_stack:
             img = cv2.adaptiveThreshold(
-                img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 9, thresh)
+                img, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, block_size, thresh)
             n_sites, labeled_img, stats, centroids = cv2.connectedComponentsWithStats(img)
             for stat in stats:
                 if stat[-1] <= 1:
@@ -344,8 +345,9 @@ class ImageProcessor():
         for i in np.random.choice(src_stack.shape[0], 10, replace=False):
             src_img = self.to_uint8_img(src_stack[i])
             target_img = self.to_uint8_img(target_stack[i])
-            src_img = cv2.bilateralFilter(src_img, 5, 25, 25)
-            target_img = cv2.bilateralFilter(target_img, 5, 25, 25)
+            block_size = int(2 * (self.r_atom // 2) + 1)
+            src_img = cv2.bilateralFilter(src_img, block_size, 25, 25)
+            target_img = cv2.bilateralFilter(target_img, block_size, 25, 25)
             src_kp, src_desc = orb.detectAndCompute(src_img.T, None)
             target_kp, target_desc = orb.detectAndCompute(target_img.T, None)
             bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)

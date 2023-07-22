@@ -27,6 +27,7 @@ class greenMLAnalysis():
         img_processor (ImageProcessor): an instance of the image processor class. A single instance is intended to be used to help with finding tweezer positions and creating image crops.
         model_path (string): The absolute path to a directory of a tensorflow neural network file, typically saved in the .h5 format.
         model (tensorflow.keras.Model): An instance of a tensorflow model loaded from the model path.
+        separation (int, optional): The number of pixels each tweezer is separated by. Three times this number will be used to determine the side length of crops output by this function. If left as None the nearest neighbor distance will be used instead.
         make_plots (bool): If True, a plot of the tweezer positions will be automatically generated when finding the positions of tweezers.
     """
 
@@ -35,7 +36,7 @@ class greenMLAnalysis():
         'epochs': 8
     }
 
-    def __init__(self, n_tweezers, n_loops, model_path, r_atom=2.5, tweezer_positions=None, make_plots=True):
+    def __init__(self, n_tweezers, n_loops, model_path, r_atom=2.5, separation=None, tweezer_positions=None, make_plots=True):
         """
         Initialize the greenMLAnalysis with the provided parameters.
 
@@ -44,6 +45,7 @@ class greenMLAnalysis():
             n_loops (int): Number of loops in the image stack.
             model_path (string): The absolute path to a directory of a tensorflow neural network file, typically saved in the .h5 format.
             r_atom (float, optional): approximate radius of atom in pixels.
+            separation (int, optional): The number of pixels each tweezer is separated by. Three times this number will be used to determine the side length of crops output by this function.
             tweezer_positions (numpy.ndarray, optional): Coordinates of tweezers in the stack. Should have the shape [# of tweezers, 2]. Default is None.
             make_plots (bool, optional): If True, plots will be generated to verify positions and labeling.
         """
@@ -51,6 +53,7 @@ class greenMLAnalysis():
         self.n_loops = n_loops
         self.img_processor = ImageProcessor.ImageProcessor(n_tweezers, n_loops,
                                                             r_atom=r_atom,  tweezer_positions=tweezer_positions, make_plots=make_plots)
+        self.separation = separation
         self.make_plots = make_plots
         self.model_path = model_path
         self.model = models.load_model(model_path)
@@ -202,18 +205,22 @@ class greenMLAnalysis():
 
         Parameters:
             stack (numpy.ndarray): A numpy array of 2D images. The shape of the array should be [# of files, # of images per file, image width, image height].
+            separation (int, optional): The number of pixels each tweezer is separated by. Three times this number will be used to determine the side length of crops output by this function. If left as None the nearest neighbor distance will be used instead.
 
         Returns:
             numpy.ndarray: A numpy array of images corresponding to each tweezer site. The ordering matches that of the labels output by the make_labels() method. The shape should be [# of samples, image height, image_width].
         """
-        crop_size = 2 * \
-            np.rint(1.5 * self.img_processor.nn_dist).astype(int) + 1
+        if self.separation == None:
+            separation = self.img_processor.nn_dist
+        else:
+            separation = self.separation
+        crop_size = 2 * np.rint(1.5 * separation).astype(int) + 1
         per_tweezer_file = stack.shape[1]
         n_files = stack.shape[0]
         crops_3x3 = np.empty(
             (self.n_tweezers * n_files * per_tweezer_file, crop_size, crop_size))
         for i, file_stack in enumerate(stack):
-            crops = self.img_processor.crop_tweezers(file_stack, 3)
+            crops = self.img_processor.crop_tweezers(file_stack, 3, separation=separation)
             crops_3x3[i * self.n_tweezers * per_tweezer_file:
                       (i + 1) * self.n_tweezers * per_tweezer_file] = np.reshape(crops, (-1, crop_size, crop_size))
         return np.reshape(crops_3x3, (-1, *crops_3x3.shape[-2:]))
